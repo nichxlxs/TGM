@@ -85,9 +85,9 @@ public class CTWModule extends MatchModule implements Listener {
                         for (MatchTeam otherTeam : teamManagerModule.getTeams()) {
                             for (PlayerContext playerContext : otherTeam.getMembers()) {
                                 if (otherTeam.isSpectator() || otherTeam == matchTeam) {
-                                    playerContext.getPlayer().playSound(playerContext.getPlayer().getLocation(), Sound.BLOCK_PORTAL_TRAVEL, 0.7f, 2f);
+                                    playerContext.getPlayer().playSound(playerContext.getPlayer().getLocation(), Sound.BLOCK_PORTAL_TRAVEL, 0.4f, 2f);
                                 } else {
-                                    playerContext.getPlayer().playSound(playerContext.getPlayer().getLocation(), Sound.ENTITY_BLAZE_DEATH, 0.8f, 0.8f);
+                                    playerContext.getPlayer().playSound(playerContext.getPlayer().getLocation(), Sound.ENTITY_BLAZE_DEATH, 0.6f, 0.8f);
                                 }
                             }
                         }
@@ -104,9 +104,9 @@ public class CTWModule extends MatchModule implements Listener {
                     for (MatchTeam otherTeam : teamManagerModule.getTeams()) {
                         for (PlayerContext playerContext : otherTeam.getMembers()) {
                             if (otherTeam.isSpectator() || otherTeam == matchTeam) {
-                                playerContext.getPlayer().playSound(playerContext.getPlayer().getLocation(), Sound.BLOCK_PORTAL_TRAVEL, 0.7f, 2f);
+                                playerContext.getPlayer().playSound(playerContext.getPlayer().getLocation(), Sound.BLOCK_PORTAL_TRAVEL, 0.4f, 2f);
                             } else {
-                                playerContext.getPlayer().playSound(playerContext.getPlayer().getLocation(), Sound.ENTITY_BLAZE_DEATH, 0.8f, 0.8f);
+                                playerContext.getPlayer().playSound(playerContext.getPlayer().getLocation(), Sound.ENTITY_BLAZE_DEATH, 0.6f, 0.8f);
                             }
                         }
                     }
