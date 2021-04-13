@@ -1,20 +1,19 @@
-package network.warzone.tgm.modules.team;
+package network.warzone.tgm.match.event;
 
 import lombok.AllArgsConstructor;
 import lombok.Getter;
+import network.warzone.tgm.match.Match;
 import org.bukkit.event.Event;
 import org.bukkit.event.HandlerList;
 
 /**
- * Called when a team property value is updated.
- *
- * Example: Team alias is changed.
+ * This event fires when the match unloads.
  */
 
 @AllArgsConstructor
-public class TeamUpdateEvent extends Event {
+public class MatchUnloadEvent extends Event {
     private static final HandlerList handlers = new HandlerList();
-    @Getter private MatchTeam matchTeam;
+    @Getter private Match match;
 
     @Override
     public HandlerList getHandlers() {

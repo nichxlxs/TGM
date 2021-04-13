@@ -1,7 +1,7 @@
 package network.warzone.tgm.command;
 
-import com.sk89q.minecraft.util.commands.Command;
-import com.sk89q.minecraft.util.commands.CommandContext;
+import cl.bgmp.minecraft.util.commands.CommandContext;
+import cl.bgmp.minecraft.util.commands.annotations.Command;
 import net.md_5.bungee.api.ChatColor;
 import network.warzone.tgm.TGM;
 import network.warzone.tgm.user.PlayerContext;
@@ -48,7 +48,7 @@ public class TagCommands {
                     return;
                 }
                 String tag;
-                if (cmd.getString(1).equals("-")) tag = null;
+                if ("-".equals(cmd.getString(1))) tag = null;
                 else tag = cmd.getString(1);
                 String target;
                 if (sender.hasPermission("tgm.tags.set") && cmd.argsLength() >= 3)

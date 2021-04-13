@@ -6,7 +6,8 @@ import lombok.Getter;
 import network.warzone.tgm.TGM;
 import network.warzone.tgm.match.Match;
 import network.warzone.tgm.match.MatchModule;
-import network.warzone.tgm.modules.ItemRemoveModule;
+import network.warzone.tgm.modules.itemremove.ItemRemoveInfo;
+import network.warzone.tgm.modules.itemremove.ItemRemoveModule;
 import network.warzone.tgm.modules.region.Region;
 import network.warzone.tgm.modules.region.RegionManagerModule;
 import network.warzone.tgm.modules.scoreboard.ScoreboardInitEvent;
@@ -14,7 +15,7 @@ import network.warzone.tgm.modules.scoreboard.ScoreboardManagerModule;
 import network.warzone.tgm.modules.scoreboard.SimpleScoreboard;
 import network.warzone.tgm.modules.team.MatchTeam;
 import network.warzone.tgm.modules.team.TeamManagerModule;
-import network.warzone.tgm.modules.team.TeamUpdateEvent;
+import network.warzone.tgm.modules.team.event.TeamUpdateAliasEvent;
 import network.warzone.tgm.modules.time.TimeModule;
 import network.warzone.tgm.modules.wool.WoolObjective;
 import network.warzone.tgm.modules.wool.WoolObjectiveService;
@@ -22,7 +23,6 @@ import network.warzone.tgm.modules.wool.WoolStatus;
 import network.warzone.tgm.user.PlayerContext;
 import network.warzone.tgm.util.ColorConverter;
 import network.warzone.tgm.util.FireworkUtil;
-import network.warzone.tgm.util.Parser;
 import network.warzone.tgm.util.Strings;
 import org.apache.commons.lang.StringUtils;
 import org.bukkit.*;
@@ -33,6 +33,8 @@ import org.bukkit.event.Listener;
 
 import java.util.*;
 import java.util.stream.Collectors;
+
+import static org.bukkit.SoundCategory.AMBIENT;
 
 @Getter
 public class CTWModule extends MatchModule implements Listener {
@@ -52,11 +54,11 @@ public class CTWModule extends MatchModule implements Listener {
 
     @Override
     public void load(Match match) {
-        JsonObject dtmJson = match.getMapContainer().getMapInfo().getJsonObject().get("ctw").getAsJsonObject();
+        JsonObject ctwJson = match.getMapContainer().getMapInfo().getJsonObject().get("ctw").getAsJsonObject();
         this.teamManagerModule = match.getModule(TeamManagerModule.class);
         this.scoreboardManagerModule = match.getModule(ScoreboardManagerModule.class);
 
-        for (JsonElement woolElement : dtmJson.getAsJsonArray("wools")) {
+        for (JsonElement woolElement : ctwJson.getAsJsonArray("wools")) {
             JsonObject woolObject = woolElement.getAsJsonObject();
 
             String name = woolObject.get("name").getAsString();
@@ -84,10 +86,10 @@ public class CTWModule extends MatchModule implements Listener {
 
                         for (MatchTeam otherTeam : teamManagerModule.getTeams()) {
                             for (PlayerContext playerContext : otherTeam.getMembers()) {
-                                if (otherTeam.isSpectator() || otherTeam == matchTeam) {
-                                    playerContext.getPlayer().playSound(playerContext.getPlayer().getLocation(), Sound.BLOCK_PORTAL_TRAVEL, 0.7f, 2f);
+                                if (otherTeam.isSpectator() || otherTeam.equals(matchTeam)) {
+                                    playerContext.getPlayer().playSound(playerContext.getPlayer().getLocation(), Sound.BLOCK_PORTAL_TRAVEL, AMBIENT, 0.7f, 2f);
                                 } else {
-                                    playerContext.getPlayer().playSound(playerContext.getPlayer().getLocation(), Sound.ENTITY_BLAZE_DEATH, 0.8f, 0.8f);
+                                    playerContext.getPlayer().playSound(playerContext.getPlayer().getLocation(), Sound.ENTITY_BLAZE_DEATH, AMBIENT, 0.8f, 0.8f);
                                 }
                             }
                         }
@@ -103,10 +105,10 @@ public class CTWModule extends MatchModule implements Listener {
 
                     for (MatchTeam otherTeam : teamManagerModule.getTeams()) {
                         for (PlayerContext playerContext : otherTeam.getMembers()) {
-                            if (otherTeam.isSpectator() || otherTeam == matchTeam) {
-                                playerContext.getPlayer().playSound(playerContext.getPlayer().getLocation(), Sound.BLOCK_PORTAL_TRAVEL, 0.7f, 2f);
+                            if (otherTeam.isSpectator() || otherTeam.equals(matchTeam)) {
+                                playerContext.getPlayer().playSound(playerContext.getPlayer().getLocation(), Sound.BLOCK_PORTAL_TRAVEL, AMBIENT, 0.7f, 2f);
                             } else {
-                                playerContext.getPlayer().playSound(playerContext.getPlayer().getLocation(), Sound.ENTITY_BLAZE_DEATH, 0.8f, 0.8f);
+                                playerContext.getPlayer().playSound(playerContext.getPlayer().getLocation(), Sound.ENTITY_BLAZE_DEATH, AMBIENT, 0.8f, 0.8f);
                             }
                         }
                     }
@@ -134,7 +136,9 @@ public class CTWModule extends MatchModule implements Listener {
         //load wools
         for (WoolObjective woolObjective : this.wools) {
             woolObjective.load();
-            if (module != null) module.add(new ItemRemoveModule.ItemRemoveInfo(woolObjective.getBlock()).setPreventingItemSpawn(false));
+            if (module != null) {
+                module.add(new ItemRemoveInfo(woolObjective.getBlock()));
+            }
         }
 
         if (this.wools.size() > 6) this.compactLayout = true;
@@ -162,7 +166,7 @@ public class CTWModule extends MatchModule implements Listener {
         }
         if (highest != null) {
             final Map.Entry<MatchTeam, Integer> entry = highest;
-            int amount = teamScores.entrySet().stream().filter(en -> entry.getValue().equals(en.getValue())).collect(Collectors.toList()).size();
+            int amount = (int) teamScores.entrySet().stream().filter(en -> entry.getValue().equals(en.getValue())).count();
             if (amount > 1) return null;
             else return entry.getKey();
         }
@@ -181,6 +185,8 @@ public class CTWModule extends MatchModule implements Listener {
     @EventHandler
     public void onScoreboardInit(ScoreboardInitEvent event) {
         List<MatchTeam> teams = this.teamManagerModule.getTeams();
+        SimpleScoreboard simpleScoreboard = event.getSimpleScoreboard();
+        simpleScoreboard.setTitle(ChatColor.AQUA + "Capture the Wool");
         int spaceCount = 1;
         int i = 2;
         if (!compactLayout) {
@@ -188,7 +194,7 @@ public class CTWModule extends MatchModule implements Listener {
                 if (matchTeam.isSpectator()) continue;
 
                 for (WoolObjective woolObjective : wools) {
-                    if (woolObjective.getOwner() == matchTeam) {
+                    if (woolObjective.getOwner().equals(matchTeam)) {
                         if (woolScoreboardLines.containsKey(woolObjective)) {
                             woolScoreboardLines.get(woolObjective).add(i);
                         } else {
@@ -197,14 +203,14 @@ public class CTWModule extends MatchModule implements Listener {
                             woolScoreboardLines.put(woolObjective, list);
                         }
 
-                        event.getSimpleScoreboard().add(getScoreboardString(woolObjective), i++);
+                        simpleScoreboard.add(getScoreboardString(woolObjective), i++);
                     }
                 }
-                event.getSimpleScoreboard().add(getTeamScoreboardString(matchTeam), i);
+                simpleScoreboard.add(getTeamScoreboardString(matchTeam), i);
                 teamScoreboardLines.put(matchTeam.getId(), i++);
 
                 if (teams.indexOf(matchTeam) < teams.size() - 1) {
-                    event.getSimpleScoreboard().add(StringUtils.repeat(" ", spaceCount++), i++);
+                    simpleScoreboard.add(StringUtils.repeat(" ", spaceCount++), i++);
                 }
             }
         } else {
@@ -213,7 +219,7 @@ public class CTWModule extends MatchModule implements Listener {
 
                 List<WoolObjective> wools = getTeamWoolObjectives(matchTeam);
                 for (WoolObjective woolObjective : wools) {
-                    if (woolObjective.getOwner() == matchTeam) {
+                    if (woolObjective.getOwner().equals(matchTeam)) {
                         if (woolScoreboardLines.containsKey(woolObjective)) {
                             woolScoreboardLines.get(woolObjective).add(i);
                         } else {
@@ -223,12 +229,12 @@ public class CTWModule extends MatchModule implements Listener {
                         }
                     }
                 }
-                event.getSimpleScoreboard().add(getScoreboardString(wools), i++);
-                event.getSimpleScoreboard().add(getTeamScoreboardString(matchTeam), i);
+                simpleScoreboard.add(getScoreboardString(wools), i++);
+                simpleScoreboard.add(getTeamScoreboardString(matchTeam), i);
                 teamScoreboardLines.put(matchTeam.getId(), i++);
 
                 if (teams.indexOf(matchTeam) < teams.size() - 1) {
-                    event.getSimpleScoreboard().add(StringUtils.repeat(" ", spaceCount++), i++);
+                    simpleScoreboard.add(StringUtils.repeat(" ", spaceCount++), i++);
                 }
             }
         }
@@ -237,22 +243,20 @@ public class CTWModule extends MatchModule implements Listener {
     public List<WoolObjective> getIncompleteWools(MatchTeam matchTeam) {
         List<WoolObjective> list = new ArrayList<>();
         for (WoolObjective woolObjective : wools) {
-            if (woolObjective.getOwner() == matchTeam) {
-                if (!woolObjective.isCompleted()) {
-                    list.add(woolObjective);
-                }
+            if (woolObjective.getOwner().equals(matchTeam) && !woolObjective.isCompleted()) {
+                list.add(woolObjective);
             }
         }
         return list;
     }
 
     @EventHandler
-    public void onTeamUpdate(TeamUpdateEvent event) {
+    public void onTeamUpdate(TeamUpdateAliasEvent event) {
         Set<String> teamIds = this.teamScoreboardLines.keySet();
         Set<MatchTeam> teams = teamIds.stream().map(id -> this.teamManagerModule.getTeamById(id)).collect(Collectors.toSet());
 
         for (MatchTeam matchTeam : teams) {
-            if (event.getMatchTeam() == matchTeam) {
+            if (event.getMatchTeam().equals(matchTeam)) {
                 int i = this.teamScoreboardLines.get(matchTeam.getId());
                 for (SimpleScoreboard simpleScoreboard : this.scoreboardManagerModule.getScoreboards().values()) {
                     simpleScoreboard.add(getTeamScoreboardString(matchTeam), i);
@@ -288,16 +292,16 @@ public class CTWModule extends MatchModule implements Listener {
     private String getScoreboardString(WoolObjective woolObjective) {
         WoolStatus woolStatus = woolObjective.getStatus();
         if (woolStatus == WoolStatus.COMPLETED) {
-            return "  " + woolObjective.getColor() + SYMBOL_WOOL_COMPLETE + ChatColor.WHITE + " " + woolObjective.getName();
+            return woolObjective.getColor() + "  " + SYMBOL_WOOL_COMPLETE + ChatColor.WHITE + " " + woolObjective.getName() + " Wool";
         } else if (woolStatus == WoolStatus.TOUCHED) {
-            return "  " + woolObjective.getColor() + SYMBOL_WOOL_TOUCHED + ChatColor.WHITE + " " + woolObjective.getName();
+            return woolObjective.getColor() + "  " + SYMBOL_WOOL_TOUCHED + ChatColor.WHITE + " " + woolObjective.getName() + " Wool";
         } else {
-            return "  " + woolObjective.getColor() + SYMBOL_WOOL_INCOMPLETE + ChatColor.WHITE + " " + woolObjective.getName();
+            return woolObjective.getColor() + "  " + SYMBOL_WOOL_INCOMPLETE + ChatColor.WHITE + " " + woolObjective.getName() + " Wool";
         }
     }
 
     private String getScoreboardString(List<WoolObjective> woolObjectives) {
-        StringBuilder result = new StringBuilder();
+        StringBuilder result = new StringBuilder(ChatColor.WHITE.toString());
         for (WoolObjective woolObjective : woolObjectives) {
             WoolStatus woolStatus = woolObjective.getStatus();
             if (woolStatus == WoolStatus.COMPLETED) {

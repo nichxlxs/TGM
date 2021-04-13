@@ -13,7 +13,6 @@ import network.warzone.tgm.modules.region.Region;
 import network.warzone.tgm.modules.region.RegionManagerModule;
 import network.warzone.tgm.modules.team.MatchTeam;
 import network.warzone.tgm.modules.team.TeamManagerModule;
-import network.warzone.tgm.util.Parser;
 import org.bukkit.Location;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
@@ -33,7 +32,7 @@ public class UseShearFilterType implements FilterType, Listener {
     private final List<Region> regions;
     private final FilterEvaluator evaluator;
     private final String message;
-    private final  boolean inverted;
+    private final boolean inverted;
 
     @EventHandler
     public void onShear(PlayerShearEntityEvent e) {
@@ -55,8 +54,7 @@ public class UseShearFilterType implements FilterType, Listener {
     }
 
     private boolean contains(Region region, Location location) {
-        if (!inverted) return region.contains(location);
-        else return !region.contains(location);
+        return (!inverted && region.contains(location)) || (inverted && !region.contains(location));
     }
 
     public static UseShearFilterType parse(Match match, JsonObject jsonObject) {

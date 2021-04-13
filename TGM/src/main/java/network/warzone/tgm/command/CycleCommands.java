@@ -1,26 +1,30 @@
 package network.warzone.tgm.command;
 
-import com.sk89q.minecraft.util.commands.*;
+import cl.bgmp.minecraft.util.commands.CommandContext;
+import cl.bgmp.minecraft.util.commands.annotations.Command;
+import cl.bgmp.minecraft.util.commands.annotations.CommandPermissions;
+import cl.bgmp.minecraft.util.commands.exceptions.CommandException;
+import cl.bgmp.minecraft.util.commands.exceptions.CommandNumberFormatException;
 import net.md_5.bungee.api.ChatColor;
 import net.md_5.bungee.api.chat.ClickEvent;
 import net.md_5.bungee.api.chat.ComponentBuilder;
 import net.md_5.bungee.api.chat.HoverEvent;
 import net.md_5.bungee.api.chat.TextComponent;
 import network.warzone.tgm.TGM;
+import network.warzone.tgm.chat.ChatChannel;
+import network.warzone.tgm.chat.ChatConstant;
+import network.warzone.tgm.chat.ChatListener;
 import network.warzone.tgm.config.TGMConfigReloadEvent;
 import network.warzone.tgm.gametype.GameType;
 import network.warzone.tgm.map.MapContainer;
 import network.warzone.tgm.map.MapInfo;
+import network.warzone.tgm.match.Match;
 import network.warzone.tgm.match.MatchStatus;
-import network.warzone.tgm.modules.chat.ChatChannel;
-import network.warzone.tgm.modules.chat.ChatConstant;
-import network.warzone.tgm.modules.chat.ChatModule;
 import network.warzone.tgm.modules.countdown.*;
 import network.warzone.tgm.modules.killstreak.KillstreakModule;
 import network.warzone.tgm.modules.kit.classes.GameClassModule;
 import network.warzone.tgm.modules.team.MatchTeam;
 import network.warzone.tgm.modules.team.TeamManagerModule;
-import network.warzone.tgm.modules.team.TeamUpdateEvent;
 import network.warzone.tgm.modules.time.TimeModule;
 import network.warzone.tgm.player.event.PlayerJoinTeamAttemptEvent;
 import network.warzone.tgm.user.PlayerContext;
@@ -46,7 +50,7 @@ import java.util.stream.Collectors;
 
 public class CycleCommands {
 
-    @Command(aliases = {"maps"}, desc = "View the maps that are on Warzone, although not necessarily in the rotation.", usage = "[type]? [page]")
+    @Command(aliases = {"maps"}, desc = "View the maps that are on the server, although not necessarily in the rotation.", usage = "[type]? [page]")
     public static void maps(CommandContext cmd, CommandSender sender) throws CommandException {
         int index = 1;
         String typeString = "";
@@ -69,7 +73,7 @@ public class CycleCommands {
 
         GameType type = null;
         for (GameType gameType : GameType.values()) {
-            if (gameType.name().toLowerCase().equals(typeString.toLowerCase())) {
+            if (gameType.name().equalsIgnoreCase(typeString)) {
                 type = gameType;
             }
         }
@@ -107,7 +111,7 @@ public class CycleCommands {
         }
     }
 
-    @Command(aliases = {"findmaps"}, desc = "Find the maps that are on Warzone, although not necessarily in the rotation.", min = 1, usage = "<map name> [page]")
+    @Command(aliases = {"findmaps"}, desc = "Find the maps that are on the server, although not necessarily in the rotation.", min = 1, usage = "<map name> [page]")
     public static void findmaps(CommandContext cmd, CommandSender sender) throws CommandException {
         List<MapContainer> mapLibrary = TGM.get().getMatchManager().getMapLibrary().getMaps();
         List<Integer> foundMaps = new ArrayList<>();
@@ -153,37 +157,6 @@ public class CycleCommands {
         }
     }
 
-    @Command(aliases = {"rot", "rotation", "rotations"}, desc = "View the maps that are in the rotation.", usage = "[page]")
-    public static void rotation(final CommandContext cmd, CommandSender sender) throws CommandException {
-        int index = cmd.argsLength() == 0 ? 1 : cmd.getInteger(0);
-        List<MapContainer> rotation = TGM.get().getMatchManager().getMapRotation().getMaps();
-
-        int pageSize = 9;
-
-        int pagesRemainder = rotation.size() % pageSize;
-        int pagesDivisible = rotation.size() / pageSize;
-        int pages = pagesDivisible;
-
-        if (pagesRemainder >= 1) {
-            pages = pagesDivisible + 1;
-        }
-
-        if ((index > pages) || (index <= 0)) {
-            index = 1;
-        }
-
-        sender.sendMessage(ChatColor.YELLOW + "Active Rotation (" + index + "/" + pages + "): ");
-        try {
-            for (int i = 0; i < pageSize; i++) {
-                int position = pageSize * (index - 1) + i;
-                MapContainer map = rotation.get(position);
-                TextComponent message = mapToTextComponent(position, map.getMapInfo());
-                sender.spigot().sendMessage(message);
-            }
-        } catch (IndexOutOfBoundsException ignored) {
-        }
-    }
-
     @Command(aliases = {"cycle"}, desc = "Cycle to a new map.")
     @CommandPermissions({"tgm.cycle"})
     public static void cycle(CommandContext cmd, CommandSender sender) {
@@ -198,8 +171,14 @@ public class CycleCommands {
                     return;
                 }
             }
-            sender.sendMessage(ChatColor.GREEN + "Cycling in " + time + " seconds.");
             TGM.get().getModule(CycleCountdown.class).start(time);
+            for (Player player : Bukkit.getOnlinePlayers().stream().filter((player) -> player.hasPermission("tgm.cycle")).collect(Collectors.toSet())) {
+                if (time == 0) {
+                    player.sendMessage(ChatColor.YELLOW + sender.getName() + ChatColor.GRAY + " cycled the map");
+                    continue;
+                }
+                player.sendMessage(ChatColor.YELLOW + sender.getName() + ChatColor.GRAY + " set the cycle countdown to " + ChatColor.YELLOW + time + ChatColor.GRAY + " second" + (time == 1 ? "" : "s"));
+            }
         } else {
             sender.sendMessage(ChatColor.RED + "A match is currently in progress.");
         }
@@ -208,9 +187,11 @@ public class CycleCommands {
     @Command(aliases = {"start"}, desc = "Start the match.")
     @CommandPermissions({"tgm.start"})
     public static void start(CommandContext cmd, CommandSender sender) {
-        MatchStatus matchStatus = TGM.get().getMatchManager().getMatch().getMatchStatus();
+        Match match = TGM.get().getMatchManager().getMatch();
+        MatchStatus matchStatus = match.getMatchStatus();
         if (matchStatus == MatchStatus.PRE) {
-            int time = StartCountdown.START_TIME;
+            StartCountdown startCountdown = TGM.get().getModule(StartCountdown.class);
+            int time = startCountdown.getStartTime();
             if (cmd.argsLength() > 0) {
                 try {
                     time = cmd.getInteger(0);
@@ -222,7 +203,14 @@ public class CycleCommands {
             boolean soloStart = Bukkit.getOnlinePlayers().size() <= 1;
             if (!soloStart)
                 sender.sendMessage(ChatColor.GREEN + "Match will start in " + time + " second" + (time == 1 ? "" : "s") + ".");
-            TGM.get().getModule(StartCountdown.class).start((soloStart) ? 0 : time);
+            startCountdown.start((soloStart) ? 0 : time);
+            for (Player player : Bukkit.getOnlinePlayers().stream().filter((player) -> player.hasPermission("tgm.start")).collect(Collectors.toSet())) {
+                if (time == 0) {
+                    player.sendMessage(ChatColor.YELLOW + sender.getName() + ChatColor.GRAY + " started the match");
+                    continue;
+                }
+                player.sendMessage(ChatColor.YELLOW + sender.getName() + ChatColor.GRAY + " set the start countdown to " + ChatColor.YELLOW + time + ChatColor.GRAY + " second" + (time == 1 ? "" : "s"));
+            }
         } else {
             sender.sendMessage(ChatColor.RED + "The match cannot be started at this time.");
         }
@@ -239,15 +227,16 @@ public class CycleCommands {
                     sender.sendMessage(ChatColor.RED + "Unable to find team \"" + cmd.getJoinedStrings(0) + "\"");
                     return;
                 }
-                sender.sendMessage(ChatColor.GREEN + "Ending match...");
                 TGM.get().getMatchManager().endMatch(matchTeam);
             } else {
-                sender.sendMessage(ChatColor.GREEN + "Ending match...");
                 if (cmd.hasFlag('f')) {
                     TGM.get().getMatchManager().endMatch(null);
                 } else {
                     TGM.get().getModule(TimeModule.class).endMatch();
                 }
+            }
+            for (Player player : Bukkit.getOnlinePlayers().stream().filter((player) -> player.hasPermission("tgm.end")).collect(Collectors.toSet())) {
+                player.sendMessage(ChatColor.YELLOW + sender.getName() + ChatColor.GRAY + " ended the match");
             }
         } else {
             sender.sendMessage(ChatColor.RED + "No match in progress.");
@@ -260,10 +249,12 @@ public class CycleCommands {
         for (Countdown countdown : TGM.get().getModules(Countdown.class)) {
             countdown.cancel();
         }
-        sender.sendMessage(ChatColor.GREEN + "Countdowns cancelled.");
+        for (Player player : Bukkit.getOnlinePlayers().stream().filter((player) -> player.hasPermission("tgm.cancel")).collect(Collectors.toSet())) {
+            player.sendMessage(ChatColor.YELLOW + sender.getName() + ChatColor.GRAY + " cancelled the countdowns");
+        }
     }
 
-    @Command(aliases = {"setnext", "sn"}, desc = "Set the next map.")
+    @Command(aliases = {"setnext", "sn"}, desc = "Set the next map.", anyFlags = true, flags = "s")
     @CommandPermissions({"tgm.setnext"})
     public static void setNext(CommandContext cmd, CommandSender sender) {
         if (cmd.argsLength() > 0) {
@@ -288,9 +279,14 @@ public class CycleCommands {
             }
 
             TGM.get().getMatchManager().setForcedNextMap(found);
-            sender.sendMessage(ChatColor.GREEN + "Set the next map to " + ChatColor.YELLOW + found.getMapInfo().getName() + ChatColor.GRAY + " (" + found.getMapInfo().getVersion() + ")");
+
+            boolean announceToEveryone = !cmd.hasFlag('s');
+            for (Player player : Bukkit.getOnlinePlayers().stream().filter((player) -> announceToEveryone || player.hasPermission("tgm.setnext")).collect(Collectors.toSet())) {
+                player.sendMessage(ChatColor.YELLOW + sender.getName() + ChatColor.GRAY + " set the next map to " +
+                        ChatColor.YELLOW + found.getMapInfo().getName() + ChatColor.GRAY + " (" + found.getMapInfo().getVersion() + ")");
+            }
         } else {
-            sender.sendMessage(ChatColor.RED + "/sn <map_name>");
+            sender.sendMessage(ChatColor.RED + "/sn [-s] <map_name>");
         }
     }
 
@@ -466,7 +462,6 @@ public class CycleCommands {
                     }
                     sender.sendMessage(ChatColor.GREEN + "Renamed " + matchTeam.getColor() + matchTeam.getAlias() + ChatColor.GREEN + " to " + matchTeam.getColor() + cmd.getString(2));
                     matchTeam.setAlias(cmd.getString(2));
-                    Bukkit.getPluginManager().callEvent(new TeamUpdateEvent(matchTeam));
                 } else {
                     sender.sendMessage(ChatColor.RED + "/team alias (team) (name)");
                 }
@@ -505,7 +500,6 @@ public class CycleCommands {
                     }
                     matchTeam.setMin(min);
                     matchTeam.setMax(max);
-                    Bukkit.getPluginManager().callEvent(new TeamUpdateEvent(matchTeam));
                     sender.sendMessage(ChatColor.GREEN + "Set " + matchTeam.getColor() + matchTeam.getAlias() + ChatColor.GREEN + " size limits to " + min + "-" + max);
                 } else {
                     sender.sendMessage(ChatColor.RED + "/team size (team) (min) (max)");
@@ -524,6 +518,8 @@ public class CycleCommands {
         TGM.get().getMatchManager().getMapLibrary().refreshMaps();
         TGM.get().getMatchManager().getMapRotation().refresh();
         sender.sendMessage(ChatColor.GREEN + "Refreshed map library and rotation.");
+        // Attempt to cycle to a new match, if a match does not yet exist after loading maps
+        if (TGM.get().getMatchManager().getMatch() == null) TGM.get().getMatchManager().cycleNextMatch();
     }
 
     @Command(aliases = {"channel", "chatchannel", "cc"}, desc = "Change or select a chat channel.", usage = "(all|team|staff)", min = 1)
@@ -551,7 +547,7 @@ public class CycleCommands {
             return;
         }
 
-        ChatModule.getChannels().put(player.getUniqueId().toString(), channel);
+        ChatListener.getChannels().put(player.getUniqueId().toString(), channel);
         player.sendMessage(ColorConverter.filterString("&7You've been added to the channel &c&l" + channel.name() + "&7."));
     }
 
@@ -563,7 +559,7 @@ public class CycleCommands {
         }
         if (cmd.argsLength() > 0) {
             PlayerContext playerContext = TGM.get().getPlayerManager().getPlayerContext((Player) sender);
-            TGM.get().getModule(ChatModule.class).sendTeamChat(playerContext, cmd.getJoinedStrings(0));
+            TGM.get().getChatListener().sendTeamChat(playerContext, cmd.getJoinedStrings(0));
         }
     }
 
@@ -801,7 +797,7 @@ public class CycleCommands {
         }
     }
 
-    public static void viewStats(CommandSender sender, String target) {
+    private static void viewStats(CommandSender sender, String target) {
         Player targetPlayer = Bukkit.getServer().getPlayer(target);
         if (targetPlayer == null) {
             Bukkit.getScheduler().runTaskAsynchronously(TGM.get(), () -> {
@@ -882,10 +878,10 @@ public class CycleCommands {
         }
 
         PlayerContext playerContext = TGM.get().getPlayerManager().getPlayerContext(player);
-        teamManager.joinTeam(playerContext, matchTeam, ignoreFull);
+        teamManager.joinTeam(playerContext, matchTeam, ignoreFull, false);
     }
 
-    private static TextComponent profileToTextComponent(UserProfile profile, int place, LeaderboardCriterion criterion) {
+    public static TextComponent profileToTextComponent(UserProfile profile, int place, LeaderboardCriterion criterion) {
         TextComponent main = new TextComponent(
                 ChatColor.translateAlternateColorCodes('&', "&7" + place + "." + " &b" +
                         profile.getName() + " &7(&9" + criterion.extract(profile) + " " +
@@ -908,16 +904,17 @@ public class CycleCommands {
         return main;
     }
 
-    private static TextComponent mapToTextComponent(int position, MapInfo mapInfo) {
+    public static TextComponent mapToTextComponent(int position, MapInfo mapInfo) {
         String mapName = ChatColor.GOLD + mapInfo.getName();
 
-        if (mapInfo.equals(TGM.get().getMatchManager().getMatch().getMapContainer().getMapInfo())) {
+        Match currentMatch = TGM.get().getMatchManager().getMatch();
+        if (currentMatch != null && mapInfo.equals(currentMatch.getMapContainer().getMapInfo())) {
             mapName = ChatColor.GREEN + "" + (position + 1) + ". " + mapName;
         } else {
             mapName = ChatColor.WHITE + "" + (position + 1) + ". " + mapName;
         }
         TextComponent message = new TextComponent(mapName);
-        message.setClickEvent(new ClickEvent(ClickEvent.Action.SUGGEST_COMMAND, "/sn " + mapInfo.getName()));
+        message.setClickEvent(new ClickEvent(ClickEvent.Action.SUGGEST_COMMAND, "/setnext " + mapInfo.getName()));
         message.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new ComponentBuilder(ChatColor.GOLD + mapInfo.getName()).append("\n\n")
                 .append(ChatColor.GRAY + "Authors: ").append(ChatColor.YELLOW + mapInfo.getAuthors().stream().map(Strings::getAuthorUsername).collect(Collectors.joining(", "))).append("\n")
                 .append(ChatColor.GRAY + "Game Type: ").append(ChatColor.YELLOW + mapInfo.getGametype().toString()).append("\n")

@@ -13,8 +13,9 @@ import network.warzone.tgm.modules.scoreboard.ScoreboardInitEvent;
 import network.warzone.tgm.modules.scoreboard.ScoreboardManagerModule;
 import network.warzone.tgm.modules.scoreboard.SimpleScoreboard;
 import network.warzone.tgm.modules.team.MatchTeam;
-import network.warzone.tgm.modules.team.TeamChangeEvent;
+import network.warzone.tgm.modules.team.event.TeamChangeEvent;
 import network.warzone.tgm.modules.team.TeamManagerModule;
+import network.warzone.tgm.modules.team.event.TeamUpdateAliasEvent;
 import network.warzone.tgm.modules.time.TimeModule;
 import network.warzone.tgm.player.event.PlayerJoinTeamAttemptEvent;
 import network.warzone.tgm.player.event.TGMPlayerDeathEvent;
@@ -29,6 +30,7 @@ import org.bukkit.event.player.PlayerEvent;
 import org.bukkit.event.player.PlayerKickEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 
+import java.lang.ref.WeakReference;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -50,13 +52,13 @@ public class BlitzModule extends MatchModule implements Listener {
     private String subtitle = ChatColor.GREEN + "Remaining lives:  " + ChatColor.YELLOW + "%lives%";
     private String actionbar = "";
 
-    private Match match;
+    private WeakReference<Match> match;
 
     private final RespawnRule respawnRule = new RespawnRule(null, 3000, false, false, false);
 
     @Override
     public void load(Match match) {
-        this.match = match;
+        this.match = new WeakReference<Match>(match);
         this.teamManagerModule = TGM.get().getModule(TeamManagerModule.class);
         JsonObject mapInfo = match.getMapContainer().getMapInfo().getJsonObject();
 
@@ -127,7 +129,7 @@ public class BlitzModule extends MatchModule implements Listener {
         List<MatchTeam> teams = teamManagerModule.getTeams();
 
         SimpleScoreboard simpleScoreboard = event.getSimpleScoreboard();
-        simpleScoreboard.setTitle(ChatColor.AQUA + "Players");
+        simpleScoreboard.setTitle(ChatColor.AQUA + "Blitz");
 
         int i = 2;
         for (MatchTeam matchTeam : teams) {
@@ -143,9 +145,19 @@ public class BlitzModule extends MatchModule implements Listener {
 
     @EventHandler(ignoreCancelled = true)
     public void onJoinAttempt(PlayerJoinTeamAttemptEvent event) {
-        if (!this.match.getMatchStatus().equals(MatchStatus.PRE)) {
+        if (!this.match.get().getMatchStatus().equals(MatchStatus.PRE)) {
             event.getPlayerContext().getPlayer().sendMessage(ChatColor.RED + "You can't pick a team after the match starts in this mode.");
             event.setCancelled(true);
+        }
+    }
+
+    public void updateScoreboardAliasLine(MatchTeam matchTeam) {
+        if (!teamScoreboardLines.containsKey(matchTeam)) return;
+        for (SimpleScoreboard simpleScoreboard : TGM.get().getModule(ScoreboardManagerModule.class).getScoreboards().values()) {
+            int line = teamScoreboardLines.get(matchTeam);
+            simpleScoreboard.remove(line + 1);
+            simpleScoreboard.add(matchTeam.getColor() + matchTeam.getAlias(), line + 1);
+            simpleScoreboard.update();
         }
     }
 
@@ -160,7 +172,13 @@ public class BlitzModule extends MatchModule implements Listener {
     }
 
     private String getTeamScoreLine(MatchTeam matchTeam, int size) {
-        return "  " + ChatColor.RESET + size + ChatColor.GRAY + " Alive";
+        return ChatColor.WHITE + "  " + size + ChatColor.GRAY + " Alive";
+    }
+
+    @EventHandler
+    public void onTeamUpdate(TeamUpdateAliasEvent event) {
+        MatchTeam team = event.getMatchTeam();
+        if (!team.isSpectator()) updateScoreboardAliasLine(team);
     }
 
     private void showLives(Player player) {
@@ -215,7 +233,8 @@ public class BlitzModule extends MatchModule implements Listener {
 
     private void handleQuit(PlayerEvent event) {
         if ((teamManagerModule.getTeam(event.getPlayer()) != null && teamManagerModule.getTeam(event.getPlayer()).isSpectator())) return;
-        updateScoreboardTeamLine(teamManagerModule.getTeam(event.getPlayer()), getAlivePlayers(teamManagerModule.getTeam(event.getPlayer())).size() - 1);
+        playerLives.remove(event.getPlayer().getUniqueId());
+        updateScoreboardTeamLine(teamManagerModule.getTeam(event.getPlayer()), getAlivePlayers(teamManagerModule.getTeam(event.getPlayer())).size());
 
         if (!TGM.get().getMatchManager().getMatch().getMatchStatus().equals(MatchStatus.MID)) return;
 

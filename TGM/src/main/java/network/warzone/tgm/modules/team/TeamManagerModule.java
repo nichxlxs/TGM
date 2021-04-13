@@ -2,16 +2,18 @@ package network.warzone.tgm.modules.team;
 
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
-import com.google.gson.JsonObject;
 import lombok.Getter;
 import lombok.Setter;
 import network.warzone.tgm.TGM;
 import network.warzone.tgm.join.MatchJoinEvent;
 import network.warzone.tgm.map.ParsedTeam;
 import network.warzone.tgm.match.Match;
+import network.warzone.tgm.match.MatchManager;
 import network.warzone.tgm.match.MatchModule;
+import network.warzone.tgm.match.MatchStatus;
 import network.warzone.tgm.match.ModuleData;
 import network.warzone.tgm.match.ModuleLoadTime;
+import network.warzone.tgm.modules.team.event.TeamChangeEvent;
 import network.warzone.tgm.user.PlayerContext;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
@@ -26,6 +28,7 @@ import org.bukkit.event.player.PlayerQuitEvent;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
+import java.util.stream.Collectors;
 
 @ModuleData(load = ModuleLoadTime.EARLIEST) @Getter @Setter
 public class TeamManagerModule extends MatchModule implements Listener {
@@ -80,20 +83,31 @@ public class TeamManagerModule extends MatchModule implements Listener {
     @EventHandler
     public void onMatchJoin(MatchJoinEvent event) {
         MatchTeam matchTeam = teamJoinController.determineTeam(event.getPlayerContext());
-        joinTeam(event.getPlayerContext(), matchTeam, true);
+        joinTeam(event.getPlayerContext(), matchTeam, true, false);
     }
 
     public void joinTeam(PlayerContext playerContext, MatchTeam matchTeam, boolean forced) {
+        joinTeam(playerContext, matchTeam, forced, false);
+    }
+
+    public void joinTeam(PlayerContext playerContext, MatchTeam matchTeam, boolean forced, boolean silent) {
         MatchTeam oldTeam = getTeam(playerContext.getPlayer());
         if (oldTeam != null) oldTeam.removePlayer(playerContext);
 
         matchTeam.addPlayer(playerContext);
 
-        TeamChangeEvent event = new TeamChangeEvent(playerContext, matchTeam, oldTeam, false, forced);
+        TeamChangeEvent event = new TeamChangeEvent(playerContext, matchTeam, oldTeam, false, forced, silent);
         Bukkit.getPluginManager().callEvent(event);
         if (event.isCancelled()) {
             matchTeam.removePlayer(playerContext);
             if (oldTeam != null) oldTeam.addPlayer(playerContext);
+        }
+
+        if (getAmountParticipating() == 0) {
+            MatchManager matchManager = TGM.get().getMatchManager();
+            if (matchManager.getMatch() != null && matchManager.getMatch().getMatchStatus() == MatchStatus.MID) {
+                matchManager.endMatch(null);
+            }
         }
     }
 
@@ -108,6 +122,13 @@ public class TeamManagerModule extends MatchModule implements Listener {
         if (matchTeam != null) {
             matchTeam.removePlayer(playerContext);
         }
+
+        if (getAmountParticipating() == 0) {
+            MatchManager matchManager = TGM.get().getMatchManager();
+            if (matchManager.getMatch() != null && matchManager.getMatch().getMatchStatus() == MatchStatus.MID) {
+                matchManager.endMatch(null);
+            }
+        }
     }
 
     public MatchTeam getTeamById(String id) {
@@ -121,7 +142,7 @@ public class TeamManagerModule extends MatchModule implements Listener {
 
     public MatchTeam getTeamByAlias(String alias) {
         for (MatchTeam matchTeam : teams) {
-            if (matchTeam.getId().equalsIgnoreCase(alias)) {
+            if (matchTeam.getAlias().equalsIgnoreCase(alias)) {
                 return matchTeam;
             }
         }
@@ -144,15 +165,16 @@ public class TeamManagerModule extends MatchModule implements Listener {
             return found;
         }
 
+        String lowered = input.toLowerCase();
         if (found == null) {
             for (MatchTeam matchTeam : teams) {
-                if (matchTeam.getId().startsWith(input)) {
+                if (matchTeam.getId().toLowerCase().startsWith(lowered)) {
                     return matchTeam;
                 }
             }
 
             for (MatchTeam matchTeam : teams) {
-                if (matchTeam.getAlias().startsWith(input)) {
+                if (matchTeam.getAlias().toLowerCase().startsWith(lowered)) {
                     return matchTeam;
                 }
             }
@@ -178,6 +200,10 @@ public class TeamManagerModule extends MatchModule implements Listener {
             }
         }
         return null;
+    }
+
+    public List<MatchTeam> getTeamsParticipating() {
+        return teams.stream().filter(t -> !t.isSpectator()).collect(Collectors.toList());
     }
 
     public MatchTeam getSmallestTeam() {

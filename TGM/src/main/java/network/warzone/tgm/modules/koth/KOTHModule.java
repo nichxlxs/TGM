@@ -16,6 +16,7 @@ import network.warzone.tgm.modules.scoreboard.ScoreboardManagerModule;
 import network.warzone.tgm.modules.scoreboard.SimpleScoreboard;
 import network.warzone.tgm.modules.team.MatchTeam;
 import network.warzone.tgm.modules.team.TeamManagerModule;
+import network.warzone.tgm.modules.team.event.TeamUpdateAliasEvent;
 import network.warzone.tgm.modules.time.TimeModule;
 import org.bukkit.ChatColor;
 import org.bukkit.event.EventHandler;
@@ -126,7 +127,7 @@ public class KOTHModule extends MatchModule implements Listener {
     public void onScoreboardInit(ScoreboardInitEvent event) {
         List<MatchTeam> teams = TGM.get().getModule(TeamManagerModule.class).getTeams();
         SimpleScoreboard simpleScoreboard = event.getSimpleScoreboard();
-
+        simpleScoreboard.setTitle(ChatColor.AQUA + "King of the Hill");
         int j = 2;
         for (ControlPoint controlPoint : controlPoints) {
             controlPointScoreboardLines.put(controlPoint.getDefinition(), j);
@@ -146,7 +147,7 @@ public class KOTHModule extends MatchModule implements Listener {
     }
 
     private String getTeamScoreLine(MatchTeam matchTeam) {
-        return pointsModule.getPoints(matchTeam) + ChatColor.DARK_GRAY.toString() + "/" + ChatColor.GRAY.toString() + pointsModule.getTarget(matchTeam) + " " + matchTeam.getColor() + matchTeam.getAlias();
+        return ChatColor.WHITE.toString() + pointsModule.getPoints(matchTeam) + ChatColor.DARK_GRAY.toString() + "/" + ChatColor.GRAY.toString() + pointsModule.getTarget(matchTeam) + " " + matchTeam.getColor() + matchTeam.getAlias();
     }
 
     private String getControlPointScoreboardLine(ControlPoint controlPoint) {
@@ -154,15 +155,21 @@ public class KOTHModule extends MatchModule implements Listener {
             if (controlPoint.getController() == null) {
                 return controlPoint.getProgressingTowardsTeam().getColor().toString() + controlPoint.getPercent() + "% " + ChatColor.WHITE + controlPoint.getDefinition().getName();
             } else {
-                return controlPoint.getPercent() + "% " + controlPoint.getController().getColor() + controlPoint.getDefinition().getName();
+                return ChatColor.WHITE.toString() + controlPoint.getPercent() + "% " + controlPoint.getController().getColor() + controlPoint.getDefinition().getName();
             }
         } else {
             if (controlPoint.getController() == null) {
-                return ControlPoint.SYMBOL_CP_INCOMPLETE + " " + controlPoint.getDefinition().getName();
+                return ChatColor.WHITE.toString() + ControlPoint.SYMBOL_CP_INCOMPLETE + " " + controlPoint.getDefinition().getName();
             } else {
-                return ControlPoint.SYMBOL_CP_COMPLETE + " " + controlPoint.getController().getColor() + controlPoint.getDefinition().getName();
+                return ChatColor.WHITE.toString() + ControlPoint.SYMBOL_CP_COMPLETE + " " + controlPoint.getController().getColor() + controlPoint.getDefinition().getName();
             }
         }
+    }
+
+    @EventHandler
+    public void onTeamUpdate(TeamUpdateAliasEvent event) {
+        MatchTeam team = event.getMatchTeam();
+        if (!team.isSpectator()) updateScoreboardTeamLine(team);
     }
 
     @Override

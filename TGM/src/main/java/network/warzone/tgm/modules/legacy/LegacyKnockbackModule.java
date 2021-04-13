@@ -1,4 +1,4 @@
-package network.warzone.tgm.modules.knockback;
+package network.warzone.tgm.modules.legacy;
 
 import lombok.AllArgsConstructor;
 import lombok.Getter;
@@ -30,7 +30,7 @@ import static java.lang.Math.PI;
 /**
  * Complete override for the vanilla knockback system.
  */
-public class KnockbackModule extends MatchModule implements Listener {
+public class LegacyKnockbackModule extends MatchModule implements Listener {
 
     private static final Set<EntityDamageEvent.DamageCause> CAUSES = new HashSet<>();
 
@@ -46,6 +46,10 @@ public class KnockbackModule extends MatchModule implements Listener {
     private static double knockBackBowVertical;
     private static double knockBackPunchMultiplier;
 
+    private Random random = new Random();
+    private Map<Arrow, Vector> arrowDirection = new HashMap<>();
+    private Map<Player, EntityDamageByEntityContext> queued = new HashMap<>();
+
     static {
         CAUSES.add(EntityDamageEvent.DamageCause.ENTITY_ATTACK);
         CAUSES.add(EntityDamageEvent.DamageCause.ENTITY_SWEEP_ATTACK);
@@ -54,26 +58,23 @@ public class KnockbackModule extends MatchModule implements Listener {
     }
 
     private static void loadValues() {
-        enabled = TGM.get().getConfig().getBoolean("custom-knockback.enabled", false);
-        knockBackFriction = TGM.get().getConfig().getDouble("custom-knockback.friction");
-        knockBackHorizontal = TGM.get().getConfig().getDouble("custom-knockback.horizontal");
-        knockBackVertical = TGM.get().getConfig().getDouble("custom-knockback.vertical");
-        knockBackVerticalLimit = TGM.get().getConfig().getDouble("custom-knockback.vertical-limit");
-        knockBackExtraHorizontal = TGM.get().getConfig().getDouble("custom-knockback.horizontal-extra");
-        knockBackExtraVertical = TGM.get().getConfig().getDouble("custom-knockback.vertical-extra");
-        knockBackBowBase = TGM.get().getConfig().getDouble("custom-knockback.bow-base");
-        knockBackBowVertical = TGM.get().getConfig().getDouble("custom-knockback.bow-vertical");
-        knockBackPunchMultiplier = TGM.get().getConfig().getDouble("custom-knockback.punch-multiplier");
+        enabled = TGM.get().getConfig().getBoolean("legacy.knockback", false);
+        knockBackFriction = TGM.get().getConfig().getDouble("legacy.custom-knockback.friction");
+        knockBackHorizontal = TGM.get().getConfig().getDouble("legacy.custom-knockback.horizontal");
+        knockBackVertical = TGM.get().getConfig().getDouble("legacy.custom-knockback.vertical");
+        knockBackVerticalLimit = TGM.get().getConfig().getDouble("legacy.custom-knockback.vertical-limit");
+        knockBackExtraHorizontal = TGM.get().getConfig().getDouble("legacy.custom-knockback.horizontal-extra");
+        knockBackExtraVertical = TGM.get().getConfig().getDouble("legacy.custom-knockback.vertical-extra");
+        knockBackBowBase = TGM.get().getConfig().getDouble("legacy.custom-knockback.bow-base");
+        knockBackBowVertical = TGM.get().getConfig().getDouble("legacy.custom-knockback.bow-vertical");
+        knockBackPunchMultiplier = TGM.get().getConfig().getDouble("legacy.custom-knockback.punch-multiplier");
     }
-
-    private Random random = new Random();
-    private Map<Arrow, Vector> arrowDirection = new HashMap<>();
-    private Map<Player, EntityDamageByEntityContext> queued = new HashMap<>();
 
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void onEntityDamage(EntityDamageByEntityEvent event) {
         if (!enabled) return;
         if (!(event.getEntity() instanceof Player)) return;
+        if (event.getCause() == EntityDamageEvent.DamageCause.FALL) return; // Temp fix
         Player player = (Player) event.getEntity();
         this.queued.put(player, new EntityDamageByEntityContext(
                 event,
@@ -84,7 +85,13 @@ public class KnockbackModule extends MatchModule implements Listener {
     @EventHandler(priority = EventPriority.HIGHEST)
     public void onPlayerVelocity(PlayerVelocityEvent event) {
         if (!enabled) return;
-        EntityDamageByEntityContext context = this.queued.get(event.getPlayer());
+        EntityDamageEvent e = event.getPlayer().getLastDamageCause();
+        if (e != null && e.getCause() == EntityDamageEvent.DamageCause.FALL) {
+            // Temp fix
+            event.setCancelled(true);
+            return; 
+        }
+        EntityDamageByEntityContext context = this.queued.remove(event.getPlayer());
         if (context == null) return;
         EntityDamageByEntityEvent edEvent = context.getEvent();
         if (CAUSES.contains(edEvent.getCause())) {
@@ -98,7 +105,6 @@ public class KnockbackModule extends MatchModule implements Listener {
             }
             // Else: Other projectiles (snowball, eggs, etc) get vanilla knockback
         }
-        this.queued.remove(event.getPlayer());
     }
 
     @EventHandler
@@ -114,6 +120,12 @@ public class KnockbackModule extends MatchModule implements Listener {
                 direction = projectile.getLocation().getDirection().clone();
             }
             addArrow((Arrow) projectile, direction);
+        }
+        
+        // Fixes arrow randomization
+        if (shooter instanceof Player) {
+            Player player = (Player) shooter;
+            projectile.setVelocity(player.getLocation().getDirection().normalize().multiply(projectile.getVelocity().length()));
         }
     }
 
@@ -202,8 +214,8 @@ public class KnockbackModule extends MatchModule implements Listener {
         }
     }
 
-    private Vector getBaseKnockback(LivingEntity victim, Vector velocity, Entity attacker) {
-        velocity = velocity.clone();
+    private Vector getBaseKnockback(LivingEntity victim, Vector vector, Entity attacker) {
+        Vector velocity = vector.clone();
         double d0 = attacker.getLocation().getX() - victim.getLocation().getX();
         double d1;
 

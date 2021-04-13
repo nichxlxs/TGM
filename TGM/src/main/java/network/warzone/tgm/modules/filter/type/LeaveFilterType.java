@@ -13,7 +13,6 @@ import network.warzone.tgm.modules.region.Region;
 import network.warzone.tgm.modules.region.RegionManagerModule;
 import network.warzone.tgm.modules.team.MatchTeam;
 import network.warzone.tgm.modules.team.TeamManagerModule;
-import network.warzone.tgm.util.Parser;
 import org.bukkit.Location;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
@@ -52,8 +51,7 @@ public class LeaveFilterType implements FilterType, Listener {
     }
 
     private boolean contains(Region region, Location location) {
-        if (!inverted) return region.contains(location);
-        else return !region.contains(location);
+        return (!inverted && region.contains(location)) || (inverted && !region.contains(location));
     }
 
     public static LeaveFilterType parse(Match match, JsonObject jsonObject) {
@@ -72,5 +70,4 @@ public class LeaveFilterType implements FilterType, Listener {
         boolean inverted = jsonObject.has("inverted") && jsonObject.get("inverted").getAsBoolean();
         return new LeaveFilterType(matchTeams, regions, filterEvaluator, message, inverted);
     }
-
 }

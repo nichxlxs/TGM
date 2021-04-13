@@ -5,10 +5,10 @@ import com.google.gson.JsonObject;
 import network.warzone.tgm.TGM;
 import network.warzone.tgm.match.Match;
 import network.warzone.tgm.match.MatchModule;
-import network.warzone.tgm.modules.ItemRemoveModule;
 import network.warzone.tgm.modules.base.MatchBase;
 import network.warzone.tgm.modules.ctf.objective.*;
 import network.warzone.tgm.modules.flag.MatchFlag;
+import network.warzone.tgm.modules.itemremove.ItemRemoveModule;
 import network.warzone.tgm.modules.region.Region;
 import network.warzone.tgm.modules.region.RegionManagerModule;
 import network.warzone.tgm.modules.team.MatchTeam;
@@ -30,7 +30,9 @@ public class CTFModule extends MatchModule implements CTFControllerSubscriber {
     private List<MatchBase> matchBases = new ArrayList<>();
     private List<MatchFlag> matchFlags = new ArrayList<>();
 
-    public static final String RIGHT_ARROW = "\u2192"; // →
+    public static final String FULL_FLAG = "\u2691"; // ⚑
+    public static final String EMPTY_FLAG = "\u2690"; // ⚐
+    public static final String RIGHT_ARROW = "\u2794"; // ➔
 
     @Override
     public void load(Match match) {
@@ -42,17 +44,17 @@ public class CTFModule extends MatchModule implements CTFControllerSubscriber {
 
         // Based on Objective, determine controller and apply other effects
         JsonObject optionObject = ctfJson.get("options").getAsJsonObject();
+        TimeModule timeModule = TGM.get().getModule(TimeModule.class);
         if (objective == CTFObjective.TIME) {
-            TimeModule timeModule = TGM.get().getModule(TimeModule.class);
             int timeLimit = optionObject.get("time").getAsInt();
             timeModule.setTimeLimited(true);
             timeModule.setTimeLimit(timeLimit);
             this.controller = new CTFTimeController(this, matchFlags, timeLimit);
-            timeModule.setTimeLimitService((TimeLimitService) this.controller);
         } else if (objective == CTFObjective.AMOUNT) {
             int captureAmount = optionObject.get("captures").getAsInt();
             this.controller = new CTFAmountController(this, matchFlags, captureAmount);
         }
+        timeModule.setTimeLimitService((TimeLimitService) this.controller);
 
         // Deserialize flags json into MatchFlag instances
         World world = match.getWorld();
@@ -64,6 +66,7 @@ public class CTFModule extends MatchModule implements CTFControllerSubscriber {
         ItemRemoveModule itemRemoveModule = TGM.get().getModule(ItemRemoveModule.class);
         itemRemoveModule.addAll(ItemUtils.allBannerTypes());
 
+
         // If Objective is amount, bases are required for flags to be captured
         if (objective == CTFObjective.AMOUNT) {
             RegionManagerModule regionManagerModule = TGM.get().getModule(RegionManagerModule.class);
@@ -74,7 +77,7 @@ public class CTFModule extends MatchModule implements CTFControllerSubscriber {
                 MatchTeam matchTeam = teamManagerModule.getTeamById(baseObject.get("team").getAsString());
                 List<MatchFlag> flags = new ArrayList<>();
                 for (MatchFlag flag : matchFlags) {
-                    if (flag.getTeam().equals(matchTeam)) continue;
+                    if (flag.getTeam() != null && flag.getTeam().equals(matchTeam)) continue;
                     flags.add(flag);
                 }
                 matchBases.add(new MatchBase(baseRegion, matchTeam, flags));
@@ -83,7 +86,7 @@ public class CTFModule extends MatchModule implements CTFControllerSubscriber {
     }
 
     @Override
-    public void disable() {
+    public void unload() {
         for (MatchFlag matchFlag : matchFlags) matchFlag.unload();
         for (MatchBase matchBase : matchBases) matchBase.unload();
         controller.unload();

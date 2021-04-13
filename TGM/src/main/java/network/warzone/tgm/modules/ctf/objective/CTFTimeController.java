@@ -7,7 +7,6 @@ import network.warzone.tgm.modules.scoreboard.ScoreboardInitEvent;
 import network.warzone.tgm.modules.scoreboard.ScoreboardManagerModule;
 import network.warzone.tgm.modules.scoreboard.SimpleScoreboard;
 import network.warzone.tgm.modules.team.MatchTeam;
-import network.warzone.tgm.modules.time.TimeLimitService;
 import network.warzone.tgm.modules.time.TimeModule;
 import network.warzone.tgm.modules.time.TimeSubscriber;
 import network.warzone.tgm.util.Strings;
@@ -16,13 +15,16 @@ import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
+import org.bukkit.potion.PotionEffect;
 
 import java.util.*;
+
+import static network.warzone.tgm.util.ColorConverter.format;
 
 /**
  * Created by yikes on 12/15/2019
  */
-public class CTFTimeController extends CTFController implements TimeLimitService, TimeSubscriber {
+public class CTFTimeController extends CTFController implements TimeSubscriber {
     private Map<MatchTeam, Integer> teamScores = new HashMap<>();
     private Set<MatchTeam> currentFlagHolders = new HashSet<>();
     private TimeModule timeModule;
@@ -44,16 +46,17 @@ public class CTFTimeController extends CTFController implements TimeLimitService
     }
 
     @Override
-    public void pickup(MatchFlag flag, Player stealer) {
-        super.pickup(flag, stealer);
-        currentFlagHolders.add(flag.getTeam());
+    public void pickup(MatchFlag flag, Player stealer, List<PotionEffect> effects) {
+        stealer.sendTitle(format("&aYou are carrying &f&l"+flag.getName()), format("&eHold it to get points for your team!"), 0, 100, 20);
+        super.pickup(flag, stealer, effects);
+        currentFlagHolders.add(teamManagerModule.getTeam(stealer));
         updateAllScoreboards(getFormattedTime());
     }
 
     @Override
-    public void drop(MatchFlag flag, Player stealer, Player attacker) {
-        super.drop(flag, stealer, attacker);
-        currentFlagHolders.remove(flag.getTeam());
+    public void drop(MatchFlag flag, Player stealer, Player attacker, List<PotionEffect> effects) {
+        super.drop(flag, stealer, attacker, effects);
+        currentFlagHolders.remove(flag.getTeamHolder());
         updateAllScoreboards(getFormattedTime());
     }
 
@@ -86,7 +89,9 @@ public class CTFTimeController extends CTFController implements TimeLimitService
 
     @EventHandler
     public void onScoreboardInit(ScoreboardInitEvent event) {
-        updateScoreboard(event.getSimpleScoreboard());
+        SimpleScoreboard simpleScoreboard = event.getSimpleScoreboard();
+        simpleScoreboard.setTitle(ChatColor.AQUA + "King of the Flag");
+        updateScoreboard(simpleScoreboard);
     }
 
     private void updateScoreboard(SimpleScoreboard scoreboard) {
@@ -97,20 +102,23 @@ public class CTFTimeController extends CTFController implements TimeLimitService
         scoreboard.removeAll(ScoreboardManagerModule.getReservedExclusions());
         int spaceCount = 1;
         int positionOnScoreboard = 1;
-        scoreboard.add("Time: " + ChatColor.GREEN + formattedRemainingTime, ++positionOnScoreboard);
+        scoreboard.add(ChatColor.WHITE + "Time Left: " + ChatColor.GREEN + formattedRemainingTime, ++positionOnScoreboard);
         for (MatchTeam team : teamManagerModule.getTeams()) {
             if (team.isSpectator()) continue;
             scoreboard.add(StringUtils.repeat(" ", ++spaceCount), ++positionOnScoreboard);
-            scoreboard.add(ChatColor.LIGHT_PURPLE.toString() + getTeamPoints(team) + " points", ++positionOnScoreboard);
+            scoreboard.add(ChatColor.LIGHT_PURPLE.toString() + "  " + getTeamPoints(team) + " points", ++positionOnScoreboard);
             scoreboard.add(team.getColor() + team.getAlias(), ++positionOnScoreboard);
         }
-        scoreboard.add(StringUtils.repeat(" ", ++spaceCount), ++positionOnScoreboard);
         boolean addedAnyFlags = false;
         for (MatchFlag flag : allFlags) {
             if (flag.getFlagHolder() == null) continue;
-            if (!addedAnyFlags) addedAnyFlags = true;
+            if (!addedAnyFlags) {
+                scoreboard.add(StringUtils.repeat(" ", ++spaceCount), ++positionOnScoreboard);
+                addedAnyFlags = true;
+            }
             MatchTeam team = teamManagerModule.getTeam(flag.getFlagHolder());
-            scoreboard.add(flag.getTeam().getColor() +
+            ChatColor flagOwnerColor = flag.getTeam() == null ? ChatColor.WHITE : flag.getTeam().getColor();
+            scoreboard.add(flagOwnerColor +
                     CTFModule.RIGHT_ARROW + " " + team.getColor() + flag.getFlagHolder().getName(), ++positionOnScoreboard);
         }
         if (addedAnyFlags) scoreboard.add(StringUtils.repeat(" ", ++spaceCount), ++positionOnScoreboard);

@@ -13,7 +13,7 @@ import network.warzone.tgm.modules.region.Region;
 import network.warzone.tgm.modules.region.RegionManagerModule;
 import network.warzone.tgm.modules.team.MatchTeam;
 import network.warzone.tgm.modules.team.TeamManagerModule;
-import network.warzone.tgm.util.Parser;
+import org.bukkit.GameMode;
 import org.bukkit.Location;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
@@ -24,6 +24,7 @@ import java.util.List;
 
 @AllArgsConstructor @Getter
 public class EnterFilterType implements FilterType, Listener {
+
     private final List<MatchTeam> teams;
     private final List<Region> regions;
     private final FilterEvaluator evaluator;
@@ -37,7 +38,7 @@ public class EnterFilterType implements FilterType, Listener {
                 for (MatchTeam matchTeam : teams) {
                     if (matchTeam.containsPlayer(event.getPlayer())) {
                         FilterResult filterResult = evaluator.evaluate(event.getPlayer());
-                        if (filterResult == FilterResult.DENY) {
+                        if (filterResult == FilterResult.DENY && event.getPlayer().getGameMode() != GameMode.SPECTATOR) {
                             event.setCancelled(true);
                             if (message != null) event.getPlayer().sendMessage(message);
                         } else if (filterResult == FilterResult.ALLOW) {
@@ -50,8 +51,7 @@ public class EnterFilterType implements FilterType, Listener {
     }
 
     private boolean contains(Region region, Location location) {
-        if (!inverted) return region.contains(location);
-        else return !region.contains(location);
+        return (!inverted && region.contains(location)) || (inverted && !region.contains(location));
     }
 
     public static EnterFilterType parse(Match match, JsonObject jsonObject) {

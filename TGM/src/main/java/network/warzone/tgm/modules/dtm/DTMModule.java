@@ -16,7 +16,7 @@ import network.warzone.tgm.modules.scoreboard.ScoreboardManagerModule;
 import network.warzone.tgm.modules.scoreboard.SimpleScoreboard;
 import network.warzone.tgm.modules.team.MatchTeam;
 import network.warzone.tgm.modules.team.TeamManagerModule;
-import network.warzone.tgm.modules.team.TeamUpdateEvent;
+import network.warzone.tgm.modules.team.event.TeamUpdateAliasEvent;
 import network.warzone.tgm.modules.time.TimeModule;
 import network.warzone.tgm.player.event.PlayerXPEvent;
 import network.warzone.tgm.user.PlayerContext;
@@ -32,8 +32,11 @@ import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 
+import java.lang.ref.WeakReference;
 import java.util.*;
 import java.util.stream.Collectors;
+
+import static org.bukkit.SoundCategory.AMBIENT;
 
 @Getter
 public class DTMModule extends MatchModule implements Listener {
@@ -61,7 +64,7 @@ public class DTMModule extends MatchModule implements Listener {
             List<Material> materials = Parser.getMaterialsFromElement(monumentJson.get("materials"));
             int health = monumentJson.get("health").getAsInt();
 
-            this.monuments.add(new Monument(name, teams, region, materials, health, health));
+            this.monuments.add(new Monument(new WeakReference<>(match), name, teams, region, materials, health, health));
             if (materials == null) {
                 continue;
             }
@@ -95,7 +98,7 @@ public class DTMModule extends MatchModule implements Listener {
                     //}
 
                     for (PlayerContext playerContext : monument.getOwners().get(0).getMembers()) {
-                        playerContext.getPlayer().playSound(monument.getRegion().getCenter(), Sound.ENTITY_IRON_GOLEM_ATTACK, SoundCategory.MASTER, 1000, 1);
+                        playerContext.getPlayer().playSound(monument.getRegion().getCenter(), Sound.ENTITY_IRON_GOLEM_ATTACK, AMBIENT, 1000, 1);
                     }
 
                     if (TGM.get().getApiManager().isStatsDisabled()) return;
@@ -158,14 +161,15 @@ public class DTMModule extends MatchModule implements Listener {
     @EventHandler
     public void onScoreboardInit(ScoreboardInitEvent event) {
         List<MatchTeam> teams = TGM.get().getModule(TeamManagerModule.class).getTeams();
-
+        SimpleScoreboard simpleScoreboard = event.getSimpleScoreboard();
+        simpleScoreboard.setTitle(ChatColor.AQUA + "Destroy the Monument");
         int spaceCount = 1;
         int i = 2;
         for (MatchTeam matchTeam : teams) {
             if(matchTeam.isSpectator()) continue;
 
             for (Monument monument : this.monuments) {
-                if (monument.getOwners().contains(matchTeam)) {
+                if (!monument.getOwners().contains(matchTeam)) {
                     if (this.monumentScoreboardLines.containsKey(monument)) {
                         this.monumentScoreboardLines.get(monument).add(i);
                     } else {
@@ -174,20 +178,20 @@ public class DTMModule extends MatchModule implements Listener {
                         this.monumentScoreboardLines.put(monument, list);
                     }
 
-                    event.getSimpleScoreboard().add(getScoreboardString(monument), i++);
+                    simpleScoreboard.add(getScoreboardString(monument), i++);
                 }
             }
-            event.getSimpleScoreboard().add(getTeamScoreboardString(matchTeam), i);
+            simpleScoreboard.add(getTeamScoreboardString(matchTeam), i);
             this.teamScoreboardLines.put(matchTeam.getId(), i++);
 
             if (teams.indexOf(matchTeam) < teams.size() - 1) {
-                event.getSimpleScoreboard().add(StringUtils.repeat(" ", spaceCount++), i++);
+                simpleScoreboard.add(StringUtils.repeat(" ", spaceCount++), i++);
             }
         }
     }
 
     @EventHandler
-    public void onTeamUpdate(TeamUpdateEvent event) {
+    public void onTeamUpdate(TeamUpdateAliasEvent event) {
         Set<String> teamIds = this.teamScoreboardLines.keySet();
         Set<MatchTeam> matchTeams = teamIds.stream().map(teamManagerModule::getTeamById).collect(Collectors.toSet());
 
@@ -247,19 +251,14 @@ public class DTMModule extends MatchModule implements Listener {
     }
 
     private String getScoreboardString(Monument monument) {
-        if (monument.isAlive()) {
-            int percentage = monument.getHealthPercentage();
-
-            if (percentage > 70) {
-                return "  " + ChatColor.GREEN.toString() + percentage + "% " + ChatColor.WHITE + monument.getName();
-            } else if (percentage > 40) {
-                return "  " + ChatColor.YELLOW.toString() + percentage + "% " + ChatColor.WHITE + monument.getName();
-            } else {
-                return "  " + ChatColor.RED.toString() + percentage + "% " + ChatColor.WHITE + monument.getName();
-            }
-        } else {
-            return ChatColor.WHITE + "  " + ChatColor.STRIKETHROUGH + monument.getName();
+        int percentage = 100 - monument.getHealthPercentage();
+        ChatColor healthColor = ChatColor.YELLOW;
+        if (percentage <= 0) {
+            healthColor = ChatColor.RED;
+        } else if (percentage >= 100) {
+            healthColor = ChatColor.GREEN;
         }
+        return healthColor + "  " + percentage + "% " + ChatColor.WHITE + monument.getName();
     }
 
     private List<Monument> getAliveMonuments(MatchTeam matchTeam) {

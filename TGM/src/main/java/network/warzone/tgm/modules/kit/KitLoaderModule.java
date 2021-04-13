@@ -2,7 +2,6 @@ package network.warzone.tgm.modules.kit;
 
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
-import com.google.gson.JsonPrimitive;
 import network.warzone.tgm.match.Match;
 import network.warzone.tgm.match.MatchModule;
 import network.warzone.tgm.modules.kit.parser.EffectKitNodeParser;
@@ -12,7 +11,6 @@ import network.warzone.tgm.modules.team.TeamManagerModule;
 
 import java.util.ArrayList;
 import java.util.List;
-
 
 public class KitLoaderModule extends MatchModule {
 
@@ -32,7 +30,12 @@ public class KitLoaderModule extends MatchModule {
 
     @Override
     public void load(Match match) {
+        KitEditorModule.setKitEditable(match.getMapContainer().getMapInfo().getJsonObject().has("kits")
+                && match.getMapContainer().getMapInfo().getJsonObject().getAsJsonArray("kits").size() == 1);
+
         if (match.getMapContainer().getMapInfo().getJsonObject().has("kits")) {
+            TeamManagerModule teamManagerModule = match.getModule(TeamManagerModule.class);
+
             for (JsonElement kitElement : match.getMapContainer().getMapInfo().getJsonObject().getAsJsonArray("kits")) {
                 JsonObject kitJson = kitElement.getAsJsonObject();
 
@@ -47,7 +50,6 @@ public class KitLoaderModule extends MatchModule {
                 }
 
                 List<MatchTeam> teams = new ArrayList<>();
-                TeamManagerModule teamManagerModule = match.getModule(TeamManagerModule.class);
                 if (kitJson.has("teams")) {
                     for (JsonElement jsonElement : kitJson.getAsJsonArray("teams")) {
                         if (!jsonElement.isJsonPrimitive()) continue;
@@ -91,7 +93,6 @@ public class KitLoaderModule extends MatchModule {
                 for (MatchTeam matchTeam : teams) {
                     matchTeam.addKit(kit);
                 }
-
             }
         }
     }

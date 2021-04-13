@@ -2,6 +2,7 @@ package network.warzone.tgm.match;
 
 import lombok.Getter;
 import lombok.Setter;
+import net.md_5.bungee.api.ChatColor;
 import network.warzone.tgm.TGM;
 import network.warzone.tgm.map.*;
 import network.warzone.tgm.modules.team.MatchTeam;
@@ -11,6 +12,7 @@ import org.bukkit.Bukkit;
 import org.bukkit.World;
 import org.bukkit.WorldCreator;
 import org.bukkit.configuration.file.FileConfiguration;
+import org.bukkit.generator.ChunkGenerator;
 
 import java.io.File;
 import java.io.IOException;
@@ -23,8 +25,12 @@ import java.util.UUID;
  */
 @Getter
 public class MatchManager {
+
+
+    private static final ChunkGenerator CHUNK_GENERATOR = new NullChunkGenerator();
+
     private MapLibrary mapLibrary;
-    private MapRotation mapRotation;
+    private MapRotationFile mapRotation;
     private Match match = null;
     private int matchNumber = 0;
 
@@ -44,23 +50,46 @@ public class MatchManager {
     public void endMatch(MatchTeam winningTeam) {
         List<MatchTeam> losers = new ArrayList<>();
         for (MatchTeam matchTeam : TGM.get().getModule(TeamManagerModule.class).getTeams()) {
-            if (!matchTeam.isSpectator() && matchTeam != winningTeam) {
+            if (!matchTeam.isSpectator() && !matchTeam.equals(winningTeam)) {
                 losers.add(matchTeam);
             }
         }
         match.disable();
+        handleRotationUpdate();
 
         Bukkit.getPluginManager().callEvent(new MatchResultEvent(match, winningTeam, losers));
     }
 
-    public void cycleNextMatch() {
-        matchNumber++;
+    private static void handleRotationUpdate() {
+        int playerCount = Bukkit.getOnlinePlayers().size();
+        MapRotationFile rotationFile = TGM.get().getMatchManager().getMapRotation();
 
+        if (!rotationFile.getRotation().isDefault()) return;
+        Rotation potentialRotation = rotationFile.getRotationForPlayerCount(playerCount);
+
+        if (potentialRotation != rotationFile.getRotation()) {
+            System.out.println("Rotation has changed to " + potentialRotation.getName() + " from " + rotationFile.getRotation().getName());
+            Bukkit.getOnlinePlayers().forEach(
+                    player -> player.sendMessage(
+                            ChatColor.GRAY + "The rotation has been updated to " + ChatColor.GOLD + potentialRotation.getName() + ChatColor.GRAY + " to accommodate for the new player size."
+                    )
+            );
+
+            rotationFile.setRotation(potentialRotation.getName());
+        }
+    }
+
+    public void cycleNextMatch() {
         //find a new map to cycle to.
         MapContainer mapContainer = forcedNextMap;
         if (mapContainer == null) {
             mapContainer = mapRotation.cycle(matchNumber == 1);
+            if (mapContainer == null) {
+                System.out.println("No maps could be found in the rotation. Are there any maps?");
+                return;
+            }
         }
+        matchNumber++;
         forcedNextMap = null;
 
         //generate next match's uuid
@@ -74,7 +103,7 @@ public class MatchManager {
 
         //create the new world under a random uuid in the matches folder.
         WorldCreator worldCreator = new WorldCreator("matches/" + matchUuid.toString());
-        worldCreator.generator(new NullChunkGenerator());
+        worldCreator.generator(CHUNK_GENERATOR);
         worldCreator.generateStructures(false);
 
         World world = worldCreator.createWorld();
@@ -115,6 +144,7 @@ public class MatchManager {
 
         //if a match is currently running, unload it.
         if (oldMatch != null) {
+            File worldFolder = oldMatch.getWorld().getWorldFolder();
             oldMatch.getWorld().getPlayers().forEach(player ->
                     player.teleport(world.getSpawnLocation()));
 
@@ -125,7 +155,7 @@ public class MatchManager {
             if (!save)
                 Bukkit.getScheduler().runTaskLaterAsynchronously(TGM.get(), () -> {
                     try {
-                        FileUtils.deleteDirectory(oldMatch.getWorld().getWorldFolder());
+                        FileUtils.deleteDirectory(worldFolder);
                     } catch (IOException e) {
                         e.printStackTrace();
                     }

@@ -1,7 +1,7 @@
 package network.warzone.tgm.modules;
 
 import network.warzone.tgm.TGM;
-import network.warzone.tgm.map.MapRotation;
+import network.warzone.tgm.map.MapRotationFile;
 import network.warzone.tgm.match.Match;
 import network.warzone.tgm.match.MatchModule;
 import network.warzone.tgm.match.MatchResultEvent;
@@ -19,14 +19,18 @@ import org.bukkit.event.Listener;
 import org.bukkit.potion.PotionEffect;
 import org.bukkit.potion.PotionEffectType;
 
+import java.lang.ref.WeakReference;
+
+import static org.bukkit.SoundCategory.AMBIENT;
+
 public class MatchResultModule extends MatchModule implements Listener {
 
-    private Match match;
+    private WeakReference<Match> match;
     private TeamManagerModule teamManagerModule;
 
     @Override
     public void load(Match match) {
-        this.match = match;
+        this.match = new WeakReference<Match>(match);
         this.teamManagerModule = TGM.get().getModule(TeamManagerModule.class);
     }
 
@@ -52,19 +56,19 @@ public class MatchResultModule extends MatchModule implements Listener {
             Location location = player.getLocation().clone().add(0.0, 100.0, 0.0);
 
             if (spectators.containsPlayer(player)) {
-                player.playSound(location, Sound.ENTITY_WITHER_DEATH, 1000, 1);
+                player.playSound(location, Sound.ENTITY_WITHER_DEATH, AMBIENT, 1000, 1);
             } else {
                 applyPostPlayer(player);
 
                 if (event.getWinningTeam() == null) {
                     player.sendTitle("", ChatColor.YELLOW + "The result was a tie!", 10, 40, 10);
-                    player.playSound(location, Sound.ENTITY_WITHER_SPAWN, 1000, 1);
+                    player.playSound(location, Sound.ENTITY_WITHER_SPAWN, AMBIENT, 1000, 1);
                 } else if (event.getWinningTeam().containsPlayer(player)) {
                     player.sendTitle("", ChatColor.GREEN + "Your team won!", 10, 40, 10);
-                    player.playSound(location, Sound.ENTITY_WITHER_DEATH, 1000, 1);
+                    player.playSound(location, Sound.ENTITY_WITHER_DEATH, AMBIENT, 1000, 1);
                 } else {
                     player.sendTitle("", ChatColor.RED + "Your team lost!", 10, 40, 10);
-                    player.playSound(location, Sound.ENTITY_WITHER_SPAWN, 1000, 1);
+                    player.playSound(location, Sound.ENTITY_WITHER_SPAWN, AMBIENT, 1000, 1);
                 }
             }
 
@@ -83,7 +87,7 @@ public class MatchResultModule extends MatchModule implements Listener {
             }
                 player.sendMessage("" + ChatColor.AQUA + ChatColor.STRIKETHROUGH + "---------------------");
         }
-        MapRotation rotation = TGM.get().getMatchManager().getMapRotation();
+        MapRotationFile rotation = TGM.get().getMatchManager().getMapRotation();
         rotation.saveRotationPosition(rotation.getCurrent() + 1);
     }
 
@@ -96,12 +100,12 @@ public class MatchResultModule extends MatchModule implements Listener {
         player.setAllowFlight(true);
         player.setVelocity(player.getVelocity().setY(1.0)); // Weeee!
         player.setFlying(true);
-        player.addPotionEffect(new PotionEffect(PotionEffectType.WEAKNESS, 1000000, 5, true, false), true);
+        player.addPotionEffect(new PotionEffect(PotionEffectType.WEAKNESS, 1000000, 5, true, false));
     }
 
     @EventHandler(priority = EventPriority.LOW)
     public void onMatchResult(PlayerJoinTeamAttemptEvent event) {
-        if (match.getMatchStatus().equals(MatchStatus.POST)) {
+        if (match.get().getMatchStatus().equals(MatchStatus.POST)) {
             event.getPlayerContext().getPlayer().sendMessage(ChatColor.RED + "The match has already ended.");
             event.setCancelled(true);
         }

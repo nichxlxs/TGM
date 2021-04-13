@@ -3,11 +3,10 @@ package network.warzone.tgm.modules;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
-import net.md_5.bungee.api.chat.ClickEvent;
-import network.warzone.tgm.TGM;
 import network.warzone.tgm.match.Match;
 import network.warzone.tgm.match.MatchModule;
 import network.warzone.tgm.parser.item.ItemDeserializer;
+import network.warzone.tgm.util.KeyUtil;
 import network.warzone.tgm.util.Strings;
 import org.bukkit.Bukkit;
 import org.bukkit.Material;
@@ -27,7 +26,6 @@ public class CraftingModule extends MatchModule implements Listener {
 
     @Override
     public void load(Match match) {
-        this.removedRecipes.add(Material.COMPASS);
         boolean removeAll = false;
         JsonElement c = match.getMapContainer().getMapInfo().getJsonObject().get("crafting");
         if (c != null && c.isJsonObject()) {
@@ -40,7 +38,7 @@ public class CraftingModule extends MatchModule implements Listener {
                         if (mat == null) continue;
                         this.removedRecipes.add(mat);
                     }
-                } else if (crafting.get("remove").isJsonPrimitive() && crafting.get("remove").getAsString().equals("*")) {
+                } else if (crafting.get("remove").isJsonPrimitive() && "*".equals(crafting.get("remove").getAsString())) {
                     removeAll = true;
                 }
             }
@@ -77,7 +75,7 @@ public class CraftingModule extends MatchModule implements Listener {
     private static Recipe parseRecipe(JsonObject jsonObject) {
         String type = jsonObject.get("type").getAsString();
         ItemStack result = ItemDeserializer.parse(jsonObject.get("result"));
-        NamespacedKey namespacedKey = TGM.getKey(result.getType().name() + new Date().getTime());
+        NamespacedKey namespacedKey = KeyUtil.tgm(result.getType().name() + new Date().getTime());
         switch (type) {
             case "shapeless":
                 ShapelessRecipe shapelessRecipe = new ShapelessRecipe(namespacedKey, result);

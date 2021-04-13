@@ -1,6 +1,9 @@
 package network.warzone.tgm.parser.item;
 
-import com.google.gson.*;
+import com.google.gson.JsonDeserializationContext;
+import com.google.gson.JsonDeserializer;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonParseException;
 import lombok.Getter;
 import lombok.Setter;
 import network.warzone.tgm.parser.item.meta.ItemMetaParser;
@@ -25,8 +28,8 @@ import java.util.Map;
  */
 public class ItemDeserializer implements JsonDeserializer<ItemStack> {
 
-    @Getter @Setter static ItemTagParser<Material> materialParser = new ItemMaterialParser();
-    @Getter @Setter static ItemTagParser<Integer> amountParser = new ItemAmountParser();
+    @Getter @Setter private static ItemTagParser<Material> materialParser = new ItemMaterialParser();
+    @Getter @Setter private static ItemTagParser<Integer> amountParser = new ItemAmountParser();
 
     private static Map<ItemMetaParserType, ItemMetaParser> metaParsers = new HashMap<ItemMetaParserType, ItemMetaParser>() {{
         put(ItemMetaParserType.DISPLAY_NAME, ItemMetaParserType.DISPLAY_NAME.newDefaultInstance());
@@ -64,7 +67,6 @@ public class ItemDeserializer implements JsonDeserializer<ItemStack> {
     public static ItemStack parse(JsonElement jsonElement) {
         if (jsonElement.isJsonPrimitive()) {
             Material material = Material.valueOf(Strings.getTechnicalName(jsonElement.getAsString()));
-            if (material == null) return null;
             return ItemFactory.createItem(material);
         } else {
             Material material = materialParser.parse(jsonElement.getAsJsonObject());

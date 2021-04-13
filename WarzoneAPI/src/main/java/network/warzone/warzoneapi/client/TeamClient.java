@@ -2,7 +2,6 @@ package network.warzone.warzoneapi.client;
 
 import network.warzone.warzoneapi.models.*;
 
-
 import java.util.UUID;
 
 /**
@@ -47,6 +46,8 @@ public interface TeamClient {
 
     RankManageResponse editPermissions(RankPermissionsUpdateRequest.Action action, RankPermissionsUpdateRequest permissionsUpdateRequest);
 
+    void createReport(ReportCreateRequest reportCreateRequest);
+
     IssuePunishmentResponse issuePunishment(IssuePunishmentRequest issuePunishmentRequest);
 
     PunishmentsListResponse getPunishments(PunishmentsListRequest punishmentsListRequest);
@@ -61,8 +62,10 @@ public interface TeamClient {
 
     LeaderboardResponse getLeaderboard(LeaderboardCriterion leaderboardCriterion);
 
-    MojangProfile getMojangProfile(UUID uuid);
-
     MojangProfile getMojangProfile(String username);
+
+    default MojangProfile getMojangProfile(UUID uuid) {
+        return getMojangProfile(uuid.toString());
+    }
 
 }

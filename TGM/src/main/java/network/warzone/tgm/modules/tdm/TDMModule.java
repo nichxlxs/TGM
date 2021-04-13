@@ -11,6 +11,7 @@ import network.warzone.tgm.modules.scoreboard.ScoreboardManagerModule;
 import network.warzone.tgm.modules.scoreboard.SimpleScoreboard;
 import network.warzone.tgm.modules.team.MatchTeam;
 import network.warzone.tgm.modules.team.TeamManagerModule;
+import network.warzone.tgm.modules.team.event.TeamUpdateAliasEvent;
 import network.warzone.tgm.modules.time.TimeModule;
 import network.warzone.tgm.player.event.TGMPlayerDeathEvent;
 import org.bukkit.ChatColor;
@@ -18,6 +19,7 @@ import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 
+import java.lang.ref.WeakReference;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -27,8 +29,8 @@ import java.util.Map;
  */
 @Getter
 public class TDMModule extends MatchModule implements Listener {
-    
-    private Match match;
+
+    private WeakReference<Match> match;
     private PointsModule pointsModule;
     private TeamManagerModule teamManager;
     private TDMObjective tdmObjective = TDMObjective.KILLS;
@@ -37,7 +39,7 @@ public class TDMModule extends MatchModule implements Listener {
 
     @Override
     public void load(Match match) {
-        this.match = match;
+        this.match = new WeakReference<Match>(match);
         teamManager = TGM.get().getModule(TeamManagerModule.class);
 
         if (match.getMapContainer().getMapInfo().getJsonObject().has("tdm")) {
@@ -83,7 +85,7 @@ public class TDMModule extends MatchModule implements Listener {
         List<MatchTeam> teams = TGM.get().getModule(TeamManagerModule.class).getTeams();
 
         SimpleScoreboard simpleScoreboard = event.getSimpleScoreboard();
-
+        simpleScoreboard.setTitle(ChatColor.AQUA + "Team Deathmatch");
         int i = 2;
         for (MatchTeam matchTeam : teams) {
             if (matchTeam.isSpectator()) continue;
@@ -97,12 +99,21 @@ public class TDMModule extends MatchModule implements Listener {
     }
 
     private String getTeamScoreLine(MatchTeam matchTeam) {
-        return "  " + ChatColor.RESET + pointsModule.getPoints(matchTeam) + ChatColor.GRAY + "/" + pointsModule.getTarget(matchTeam) + ChatColor.WHITE + " Kills";
+        return ChatColor.WHITE + "  " + pointsModule.getPoints(matchTeam) + ChatColor.DARK_GRAY + "/" + ChatColor.GRAY + pointsModule.getTarget(matchTeam) + ChatColor.WHITE + " Kills";
     }
 
     private void incrementPoints(MatchTeam matchTeam, int amount) {
         pointsModule.incrementPoints(matchTeam, amount);
         updateScoreboardTeamLine(matchTeam);
+    }
+
+    private void updateScoreboardAliasLine(MatchTeam matchTeam) {
+        for (SimpleScoreboard simpleScoreboard : TGM.get().getModule(ScoreboardManagerModule.class).getScoreboards().values()) {
+            int line = teamScoreboardLines.get(matchTeam.getId());
+            simpleScoreboard.remove(line + 1);
+            simpleScoreboard.add(matchTeam.getColor() + matchTeam.getAlias(), line + 1);
+            simpleScoreboard.update();
+        }
     }
 
     private void updateScoreboardTeamLine(MatchTeam matchTeam) {
@@ -112,6 +123,12 @@ public class TDMModule extends MatchModule implements Listener {
             simpleScoreboard.add(getTeamScoreLine(matchTeam), line);
             simpleScoreboard.update();
         }
+    }
+
+    @EventHandler
+    public void onTeamUpdate(TeamUpdateAliasEvent event) {
+        MatchTeam team = event.getMatchTeam();
+        if (!team.isSpectator()) updateScoreboardAliasLine(team);
     }
 
     @EventHandler

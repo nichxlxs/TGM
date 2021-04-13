@@ -2,7 +2,6 @@ package network.warzone.tgm.modules.countdown;
 
 import net.md_5.bungee.api.ChatColor;
 import network.warzone.tgm.TGM;
-import network.warzone.tgm.match.Match;
 import network.warzone.tgm.util.BossBarUtil;
 import org.bukkit.Bukkit;
 import org.bukkit.boss.BarColor;
@@ -10,15 +9,10 @@ import org.bukkit.boss.BarStyle;
 import org.bukkit.boss.BossBar;
 
 public class CycleCountdown extends BossBarCountdown {
-    public static int START_TIME = 20;
+    public static int START_TIME = TGM.get().getConfig().getInt("map.cycle-countdown");
 
     public CycleCountdown() {
         this.bossBar = initBossBar();
-    }
-
-    @Override
-    public void load(Match match) {
-
     }
 
     @Override
